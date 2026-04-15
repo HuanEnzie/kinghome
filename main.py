@@ -9,12 +9,46 @@ SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
 # Từ điển từ khóa thông minh - Càng nhiều từ khóa, máy càng khôn
 KEYWORD_MAP = {
-    "address": ["địa chỉ", "vị trí", "tòa nhà", "nhà", "khu vực", "tên tòa", "tên nhà", "địa chỉ nhà"],
-    "price": ["giá", "triệu", "vnd", "price", "giá chốt", "giá thuê", "thuê", "giá phòng"],
-    "status": ["trạng thái", "tình trạng", "trống", "cọc", "còn", "hiện trạng", "vào ở", "thời gian trống"],
-    "room_number": ["phòng", "số p", "mã p", "tên phòng", "số phòng", "trục", "tên p", "mã phòng"],
-    "contact": ["quản lý", "sđt", "liên hệ", "người dẫn", "dẫn khách", "phone", "zalo", "sđt quản lý"]
+    # Bổ sung các biến thể "địa chỉ tư vấn", "mã tòa" từ bảng AirStay, TVT, My Home
+    "address": ["địa chỉ", "địa chỉ nhà", "địa chỉ tư vấn", "vị trí", "tòa nhà", "nhà", "tên nhà", "tên tòa", "mã tòa", "mã phòng địa chỉ", "định vị"],
+    
+    # Bổ sung tách riêng "quận" (vì nhiều bảng như AirStay, Taco Land để riêng cột Quận)
+    "district": ["quận", "khu vực", "quận/huyện"],
+
+    # Bổ sung "trục phòng", "ds phòng", "số phòng/tầng" từ bảng BHome, My Home, TingTong
+    "room_num": ["phòng", "số p", "mã p", "tên phòng", "số phòng", "trục", "trục phòng", "tên p", "mã phòng", "ds phòng", "phòng trống", "tên phòng trống", "số phòng/tầng", "tên phòng ảnh"],
+    
+    # [MỚI] Các sheet thường dùng Loại, Dạng, Kiểu
+    "room_type": ["loại phòng", "kiểu phòng", "dạng phòng", "loại", "loại p"],
+    
+    # Bổ sung "giá 6-9-12 tháng", "giá sau điều chỉnh" (TingTong), "giá cho thuê" (My Home)
+    "price": ["giá", "giá phòng", "giá thuê", "giá cho thuê", "giá chốt", "giá sau điều chỉnh", "giá 6-9-12 tháng", "giá (vnd)", "giá ( triệu)", "triệu", "vnd", "price", "thuê"],
+    
+    # [MỚI] Diện tích rất hay được viết tắt là m2 hoặc S
+    "area": ["diện tích", "diện tích (m2)", "diện tích m2", "diện tích phòng", "m2", "s", "dt"],
+    
+    # Thu gọn status chỉ để đánh giá Tình trạng phòng, tách ngày ra riêng
+    "status": ["trạng thái", "tình trạng", "hiện trạng", "tình trạng phòng", "hiện trạng", "trống", "còn", "cọc", "đã cọc", "full"],
+    
+    # [MỚI] Tách riêng thời gian trống vì sale hay ghi "Ngày trống", "TG vào ở"
+    "available_date": ["thời gian trống", "ngày trống", "thời gian vào ở", "vào ở", "ngày xem được phòng", "ngày trống / nhận phòng", "ngày ở", "thời gian ở", "tg xem phòng"],
+    
+    # [MỚI] Cột nội thất từ các bảng BHome, TingTong...
+    "amenities": ["nội thất", "đồ đạc", "tài sản trong phòng", "thông tin nội thất", "trang thiết bị", "thông tin phòng", "mô tả", "thông tin"],
+    
+    # [MỚI] Chi phí dịch vụ rất lộn xộn, cần bắt các từ khóa sau
+    "services": ["dịch vụ", "phí dịch vụ", "dvc", "dịch vụ chung", "tiền dịch vụ", "dịch vụ bao gồm", "điện", "nước", "net", "mạng", "internet", "phí dịch vụ chung"],
+    
+    # Bổ sung "ql", "sđt bạn dẫn" từ TQ Housing, BHome...
+    "contact": ["quản lý", "ql", "sđt", "liên hệ", "người dẫn", "dẫn khách", "sđt người dẫn", "sđt bạn dẫn", "sđt quản lý", "tên quản lý", "phone", "zalo", "dẫn"],
+    
+    # [MỚI] Lấy link ảnh từ các cột (nhiều sheet gộp Ảnh+Video)
+    "images": ["ảnh", "video", "link ảnh", "link ảnh, videos", "hình ảnh", "ảnh+video", "link hình ảnh", "link thông tin", "ảnh + vid", "link ảnh+ video"],
+    
+    # [MỚI] Bắt các cột ghi chú, giới hạn người, xe, pet, hoa hồng
+    "note": ["ghi chú", "chú ý", "lưu ý", "đặc điểm", "thanh toán", "hình thức tt", "cọc", "đóng 1:1", "hoa hồng", "xe điện", "pet", "pet / xe điện", "số người ở max", "số lượng xe máy", "gửi xe", "cầu thang", "thang"]
 }
+
 
 def clean_price(val):
     if pd.isna(val) or val == "": return 0
