@@ -1,0 +1,26 @@
+name: Sync Data Every 30m
+
+on:
+  schedule:
+    - cron: "*/30 * * * *" # Lệnh này bảo GitHub cứ 30 phút tự chạy 1 lần
+  workflow_dispatch:      # Lệnh này tạo ra cái nút "Run workflow" để sếp bấm tay
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          
+      - name: Install Libs
+        run: pip install pandas requests
+        
+      - name: Run Script
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: python main.py
