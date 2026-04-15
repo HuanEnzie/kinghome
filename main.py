@@ -3,20 +3,22 @@ import pandas as pd
 import requests
 import json
 
+# Lấy cấu hình từ GitHub Secrets
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
-# Từ điển từ khóa linh hoạt hơn cho sếp
+# Từ điển từ khóa thông minh để dò cột
 KEYWORD_MAP = {
-    "address": ["địa chỉ", "vị trí", "tòa nhà", "nhà", "khu vực"],
-    "price": ["giá", "triệu", "vnd", "price"],
-    "status": ["trạng thái", "tình trạng", "trống", "còn", "hiện trạng"],
-    "room_number": ["phòng", "số p", "mã p"],
-    "contact": ["quản lý", "sđt", "liên hệ", "người dẫn", "dẫn khách"]
+    "address": ["địa chỉ", "vị trí", "tòa nhà", "nhà", "khu vực", "địa chỉ nhà"],
+    "price": ["giá", "triệu", "vnd", "price", "giá chốt", "giá thuê"],
+    "status": ["trạng thái", "tình trạng", "trống", "còn", "hiện trạng", "tình trạng phòng"],
+    "room_number": ["phòng", "số p", "mã p", "tên phòng", "số phòng"],
+    "contact": ["quản lý", "sđt", "liên hệ", "người dẫn", "dẫn khách", "sđt quản lý"]
 }
 
 def clean_price(val):
     if pd.isna(val) or val == "": return 0
+    # Xử lý các định dạng như 4.5tr, 4,500,000...
     s = str(val).lower().replace("tr", "000000").replace(".", "").replace(",", "")
     nums = "".join(filter(str.isdigit, s))
     return int(nums) if nums else 0
@@ -42,27 +44,32 @@ def run():
     all_data = []
     for src in config.get("sources", []):
         print(f"🔍 Đang quét nguồn: {src['name']}")
+        # Link tải CSV trực tiếp
         url = f"https://docs.google.com/spreadsheets/d/{src['sheet_id']}/export?format=csv"
+        
         try:
-            # Đọc thô để tìm header
-            df_raw = pd.read_csv(url, header=None, nrows=10)
+            # Đọc 15 dòng đầu để tìm dòng tiêu đề chuẩn (nhiều sheet để tiêu đề hơi sâu)
+            df_raw = pd.read_csv(url, header=None, nrows=15)
             header_idx = 0
             for i, row in df_raw.iterrows():
-                row_str = " ".join(row.astype(str).lower())
+                # CHỖ NÀY ĐÃ SỬA LỖI .lower() 
+                row_str = " ".join(row.astype(str)).lower() 
                 if any(kw in row_str for kws in KEYWORD_MAP.values() for kw in kws):
                     header_idx = i
                     break
             
+            # Đọc lại từ dòng tiêu đề đã tìm thấy
             df = pd.read_csv(url, skiprows=header_idx).fillna("")
             col_map = smart_find_columns(df.columns)
             
             if "address" not in col_map:
-                print(f"⚠️ Không tìm thấy cột Địa chỉ tại {src['name']}")
+                print(f"⚠️ Không tìm thấy cột Địa chỉ tại {src['name']} (Thử dòng header {header_idx})")
                 continue
 
             for _, row in df.iterrows():
                 addr_val = str(row.iloc[col_map["address"]]).strip()
-                if addr_val and len(addr_val) > 5: # Tránh lấy các dòng trống hoặc rác
+                # Chỉ lấy dòng có địa chỉ thật, bỏ qua dòng tiêu đề hoặc dòng trống
+                if addr_val and len(addr_val) > 5 and addr_val.lower() not in KEYWORD_MAP["address"]:
                     data = {
                         "source_name": src["name"][:255],
                         "address": addr_val[:500],
@@ -83,9 +90,12 @@ def run():
             "Prefer": "resolution=merge-duplicates"
         }
         res = requests.post(SUPABASE_URL, headers=headers, json=all_data)
-        print(f"✅ Đã đẩy {len(all_data)} phòng lên Supabase. Status: {res.status_code}")
+        if res.status_code in [200, 201]:
+            print(f"✅ Thành công! Đã đẩy {len(all_data)} phòng lên Supabase.")
+        else:
+            print(f"❌ Lỗi Supabase ({res.status_code}): {res.text}")
     else:
-        print("ℹ️ Không có dữ liệu mới để cập nhật.")
+        print("ℹ️ Không tìm thấy dữ liệu nào hợp lệ để cập nhật.")
 
 if __name__ == "__main__":
     run()
