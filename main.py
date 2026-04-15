@@ -7,13 +7,13 @@ import json
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
-# Từ điển từ khóa thông minh để máy tự "đọc hiểu" tiêu đề cột
+# Từ điển từ khóa thông minh - Càng nhiều từ khóa, máy càng khôn
 KEYWORD_MAP = {
-    "address": ["địa chỉ", "vị trí", "tòa nhà", "nhà", "khu vực", "tên tòa", "tên nhà"],
-    "price": ["giá", "triệu", "vnd", "price", "giá chốt", "giá thuê", "thuê"],
-    "status": ["trạng thái", "tình trạng", "trống", "cọc", "còn", "hiện trạng", "vào ở"],
-    "room_number": ["phòng", "số p", "mã p", "tên phòng", "số phòng", "trục", "tên p"],
-    "contact": ["quản lý", "sđt", "liên hệ", "người dẫn", "dẫn khách", "phone", "zalo"]
+    "address": ["địa chỉ", "vị trí", "tòa nhà", "nhà", "khu vực", "tên tòa", "tên nhà", "địa chỉ nhà"],
+    "price": ["giá", "triệu", "vnd", "price", "giá chốt", "giá thuê", "thuê", "giá phòng"],
+    "status": ["trạng thái", "tình trạng", "trống", "cọc", "còn", "hiện trạng", "vào ở", "thời gian trống"],
+    "room_number": ["phòng", "số p", "mã p", "tên phòng", "số phòng", "trục", "tên p", "mã phòng"],
+    "contact": ["quản lý", "sđt", "liên hệ", "người dẫn", "dẫn khách", "phone", "zalo", "sđt quản lý"]
 }
 
 def clean_price(val):
@@ -33,101 +33,84 @@ def smart_find_columns(columns):
     return mapping
 
 def run():
-    print("🚀 Bắt đầu quá trình đồng bộ dữ liệu...")
+    print("🚀 Sếp Huân lệnh, máy bắt đầu càn quét toàn bộ bảng hàng...")
     
-    if not os.path.exists("configuration.json"):
-        print("❌ LỖI: Không tìm thấy file configuration.json")
-        return
-
     with open("configuration.json", "r", encoding="utf-8") as f:
         config = json.load(f)
 
-    all_raw_data = []
+    all_data_to_push = []
 
     for src in config.get("sources", []):
-        name = src.get("name", "Unknown")
+        name = src.get("name", "Nguồn lạ")
         sheet_id = src.get("sheet_id")
-        print(f"🔍 Đang quét nguồn: {name}...")
-        
         url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv"
         
         try:
-            # Bước 1: Tìm dòng Header chuẩn trong 20 dòng đầu
-            df_header_check = pd.read_csv(url, header=None, nrows=20)
+            # Tìm dòng header chuẩn
+            df_raw = pd.read_csv(url, header=None, nrows=15)
             header_idx = 0
-            for i, row in df_header_check.iterrows():
+            for i, row in df_raw.iterrows():
                 row_str = " ".join(row.astype(str)).lower()
                 if any(kw in row_str for kws in KEYWORD_MAP.values() for kw in kws):
                     header_idx = i
                     break
             
-            # Bước 2: Đọc dữ liệu từ dòng header đã tìm thấy
             df = pd.read_csv(url, skiprows=header_idx).fillna("")
             col_map = smart_find_columns(df.columns)
             
-            # Chế độ dò địa chỉ dự phòng nếu không thấy cột tên "Địa chỉ"
+            print(f"📊 Nguồn [{name}]: Đã tìm thấy các cột: {list(col_map.keys())}")
+
+            # Dò địa chỉ dự phòng
             if "address" not in col_map:
                 for i in range(len(df.columns)):
-                    sample = str(df.iloc[0, i]) if len(df) > 0 else ""
-                    if len(sample) > 10: 
+                    if len(str(df.iloc[0, i])) > 10:
                         col_map["address"] = i
                         break
 
             if "address" not in col_map:
-                print(f"⚠️ Bỏ qua {name}: Không tìm thấy cột Địa chỉ.")
+                print(f"❌ Chịu thua nguồn {name} vì không thấy cột Địa chỉ!")
                 continue
 
-            # Bước 3: Trích xuất và làm sạch từng dòng
-            for _, row in df.iterrows():
+            for idx, row in df.iterrows():
                 addr_val = str(row.iloc[col_map["address"]]).strip()
                 
-                # Chỉ lấy dòng có địa chỉ thật (độ dài > 5) và không phải dòng tiêu đề lặp lại
+                # Lọc bỏ các dòng tiêu đề lặp lại hoặc dòng trống
                 if addr_val and len(addr_val) > 5 and addr_val.lower() not in KEYWORD_MAP["address"]:
-                    room_val = str(row.iloc[col_map["room_number"]])[:100] if "room_number" in col_map else "Chưa rõ"
-                    
+                    # Tạo room_number duy nhất nhất có thể
+                    room_val = str(row.iloc[col_map["room_number"]]).strip() if "room_number" in col_map else f"P{idx+1}"
+                    if room_val == "" or room_val.lower() == "nan": room_val = f"P{idx+1}"
+
                     record = {
                         "source_name": name[:255],
                         "address": addr_val[:500],
-                        "room_number": room_val,
+                        "room_number": room_val[:100],
                         "price": clean_price(row.iloc[col_map["price"]]) if "price" in col_map else 0,
                         "status": str(row.iloc[col_map["status"]])[:50] if "status" in col_map else "AVAILABLE",
                         "contact": str(row.iloc[col_map["contact"]])[:255] if "contact" in col_map else ""
                     }
-                    all_raw_data.append(record)
+                    all_data_to_push.append(record)
                     
         except Exception as e:
-            print(f"❌ Lỗi khi xử lý nguồn {name}: {e}")
+            print(f"❌ Lỗi tại nguồn {name}: {e}")
 
-    # Bước 4: Xử lý trùng lặp và đẩy lên Supabase
-    if all_raw_data:
-        # Loại bỏ trùng lặp ngay trong Python dựa trên bộ khóa (Nguồn, Địa chỉ, Số phòng)
-        df_final = pd.DataFrame(all_raw_data)
-        count_before = len(df_final)
-        df_final = df_final.drop_duplicates(subset=['source_name', 'address', 'room_number'], keep='first')
-        count_after = len(df_final)
-        
-        if count_before != count_after:
-            print(f"🧹 Đã lọc bỏ {count_before - count_after} dòng trùng lặp trong dữ liệu thô.")
-
-        clean_data = df_final.to_dict(orient='records')
-
+    if all_data_to_push:
         headers = {
             "apikey": SUPABASE_KEY, 
             "Authorization": f"Bearer {SUPABASE_KEY}", 
             "Content-Type": "application/json", 
-            "Prefer": "resolution=merge-duplicates" # Cơ chế UPSERT của Supabase
+            "Prefer": "resolution=merge-duplicates"
         }
         
-        try:
-            res = requests.post(SUPABASE_URL, headers=headers, json=clean_data)
-            if res.status_code in [200, 201, 204]:
-                print(f"✅ THÀNH CÔNG: Đã đồng bộ {len(clean_data)} phòng lên hệ thống!")
-            else:
-                print(f"❌ Lỗi đẩy dữ liệu (Status {res.status_code}): {res.text}")
-        except Exception as e:
-            print(f"❌ Lỗi kết nối Supabase: {e}")
+        # Chia nhỏ data để đẩy (batch) nếu quá lớn
+        batch_size = 100
+        for i in range(0, len(all_data_to_push), batch_size):
+            batch = all_data_to_push[i:i + batch_size]
+            res = requests.post(SUPABASE_URL, headers=headers, json=batch)
+            print(f"📡 Đang đẩy đợt {i//batch_size + 1}... Status: {res.status_code}")
+
+        print(f"✅ ĐÃ XONG! Tổng cộng {len(all_data_to_push)} phòng đã được đưa vào kho dữ liệu.")
     else:
-        print("ℹ️ Không tìm thấy dữ liệu hợp lệ để cập nhật.")
+        print("ℹ️ Không tìm thấy dữ liệu nào để đẩy lên.")
 
 if __name__ == "__main__":
     run()
