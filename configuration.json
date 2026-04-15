@@ -1,0 +1,19 @@
+{
+  "sources": [
+    {
+      "source_name": "TingTong",
+      "sheet_identifier": "1JcC44isHwgiWmnDce8ypV_PBC14cApWPGmxSjJcYEJg",
+      "mapping_columns": {
+        "address": 3,
+        "room_number": 1,
+        "room_type": 2,
+        "price": 4,
+        "area": 5,
+        "status": 6,
+        "contact": 7,
+        "amenities": 8,
+        "services": 9
+      }
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+name: Sync Data Every 30m
+
+on:
+  schedule:
+    - cron: "*/30 * * * *" # Chạy mỗi 30 phút
+  workflow_dispatch:      # Cho phép bấm nút chạy tay để test
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          
+      - name: Install Libs
+        run: pip install pandas requests
+        
+      - name: Run Script
+        env:
+          # Truyền Secret vào môi trường chạy của Python
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: python main.py
